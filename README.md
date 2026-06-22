@@ -68,9 +68,10 @@ npx prisma generate
 Para que los gráficos y mapas funcionen, necesitas poblar tu base de datos local con los +357,000 registros.
 
 1. **Ubicar el archivo:** Crea una carpeta llamada `data` en la raíz del proyecto y coloca dentro el archivo exacto llamado `DATASET_Denuncias_Policiales_Ene 2018 a Abr 2026.csv`.
-2. **Levantar el servidor:** ```bash
-   npm run dev
-   ```
+2. **Levantar el servidor:** 
+```bash
+npm run dev
+```
 3. **Disparar la ingesta:** Abre una **nueva pestaña** en tu terminal (dejando el servidor corriendo) y ejecuta:
    ```bash
    curl -X POST http://localhost:3000/api/admin/upload-csv
