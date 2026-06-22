@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🛡️ SecurePeru
 
-## Getting Started
+**SecurePeru** es una plataforma web interactiva y dashboard analítico desarrollado en Next.js. Permite visualizar, filtrar y analizar el historial de denuncias policiales a nivel nacional (departamentos, provincias y distritos) en el Perú, abarcando datos desde enero de 2018 hasta abril de 2026.
 
-First, run the development server:
+---
+
+## 👥 Equipo y Roles
+
+El desarrollo está dividido en 4 módulos principales (Feature-Driven) para un esfuerzo equitativo:
+
+1. **Integrante 1 (Datos y Backend):** Ingesta de CSV, automatización, diseño de Base de Datos y endpoints de administración.
+2. **Integrante 2 (Mapa Interactivo):** Renderizado de GeoJSON, coropletas departamentales y APIs geoespaciales.
+3. **Integrante 3 (Dashboard Analítico):** Filtros globales, gráficos estadísticos (tendencias temporales y modalidades) y APIs de métricas.
+4. **Integrante 4 (Navegación Local):** Rutas dinámicas por departamento, tablas de datos distritales paginadas y APIs de desglose.
+
+---
+
+## 💻 Requisitos Previos
+
+Antes de clonar el proyecto, asegúrate de tener instalado en tu computadora:
+
+* [Node.js](https://nodejs.org/) (Versión 20 LTS o superior).
+* [Git](https://git-scm.com/).
+* [PostgreSQL 17](https://www.postgresql.org/) (Corriendo localmente).
+
+---
+
+## 🚀 Configuración del Entorno Local
+
+Sigue estos pasos estrictamente en orden para levantar el proyecto en tu máquina sin errores:
+
+### 1. Clonar el repositorio e instalar dependencias
+Abre tu terminal y ejecuta:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone [https://github.com/TU_USUARIO/SecurePeru.git](https://github.com/TU_USUARIO/SecurePeru.git)
+cd SecurePeru
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configurar la Base de Datos (PostgreSQL)
+Abre tu gestor de base de datos local (pgAdmin, DBeaver, o terminal) y crea una base de datos vacía llamada `secureperu_db`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```sql
+CREATE DATABASE secureperu_db;
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Variables de Entorno
+En la raíz del proyecto, crea un archivo llamado `.env` y agrega tu cadena de conexión. Reemplaza `TU_USUARIO` y `TU_CONTRASEÑA` por las credenciales de tu PostgreSQL local:
 
-## Learn More
+```env
+DATABASE_URL="postgresql://TU_USUARIO:TU_CONTRASEÑA@localhost:5432/secureperu_db?schema=public"
+```
+*(Nota para usuarios de Mac/Homebrew: Si tu Postgres no tiene contraseña, tu URL podría verse así: `postgresql://tu_usuario_mac@localhost:5432/secureperu_db?schema=public`)*
 
-To learn more about Next.js, take a look at the following resources:
+### 4. Inicializar Prisma (Migraciones y Cliente)
+Ejecuta los siguientes comandos para que Prisma cree las tablas en tu base de datos y genere el cliente interno de TypeScript:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx prisma migrate dev --name init_denuncias
+npx prisma generate
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 📊 Poblado de Datos (Ingesta del CSV)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Para que los gráficos y mapas funcionen, necesitas poblar tu base de datos local con los +357,000 registros.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Ubicar el archivo:** Crea una carpeta llamada `data` en la raíz del proyecto y coloca dentro el archivo exacto llamado `DATASET_Denuncias_Policiales_Ene 2018 a Abr 2026.csv`.
+2. **Levantar el servidor:** ```bash
+   npm run dev
+   ```
+3. **Disparar la ingesta:** Abre una **nueva pestaña** en tu terminal (dejando el servidor corriendo) y ejecuta:
+   ```bash
+   curl -X POST http://localhost:3000/api/admin/upload-csv
+   ```
+Verás en la consola del servidor cómo se insertan los registros por lotes. Espera a que termine (mensaje: *"Migración completada exitosamente"*).
+
+---
+
+## 🛠️ Flujo de Trabajo (Git Workflow)
+
+Para evitar conflictos en el código, seguiremos estas reglas básicas:
+
+1. **Nunca trabajes directamente en la rama `main`.**
+2. Antes de empezar tu tarea, asegúrate de estar actualizado:
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+3. Crea una rama para tu módulo o tarea:
+   ```bash
+   git checkout -b feature/nombre-de-tu-modulo
+   ```
+4. Sube tus cambios a tu rama:
+   ```bash
+   git add .
+   git commit -m "feat: Agregado componente de mapa interactivo"
+   git push origin feature/nombre-de-tu-modulo
+   ```
+5. Cuando termines, abre un **Pull Request (PR)** en GitHub para integrar tu código a `main`.
+
+---
+
+## 📚 Tecnologías Utilizadas
+
+* **Framework:** Next.js (App Router)
+* **Lenguaje:** TypeScript
+* **Estilos:** Tailwind CSS
+* **Base de Datos:** PostgreSQL 17
+* **ORM:** Prisma v7 (con `@prisma/adapter-pg`)
