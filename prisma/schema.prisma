@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Denuncia {
+  id            Int      @id @default(autoincrement())
+  anio          Int
+  mes           Int
+  departamento  String
+  provincia     String
+  distrito      String
+  ubigeo        Int
+  modalidad     String
+  cantidad      Int
+
+  @@index([anio, mes])
+  @@index([departamento])
+  @@index([distrito])
+  @@index([modalidad])
+}
