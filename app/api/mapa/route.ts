@@ -2,26 +2,11 @@ import { NextResponse } from "next/server";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { validarParametrosMapa } from "@/app/lib/mapa-validacion";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
-
-type Nivel = "departamento" | "provincia" | "distrito";
-
-// Longitud del código (prefijo del ubigeo) que identifica cada nivel
-const LEN_NIVEL: Record<Nivel, number> = {
-  departamento: 2,
-  provincia: 4,
-  distrito: 6,
-};
-
-// Longitud del código del "padre" que se necesita para filtrar cada nivel
-const LEN_PADRE: Record<Nivel, number> = {
-  departamento: 0,
-  provincia: 2,
-  distrito: 4,
-};
 
 interface FilaMapa {
   codigo: string;
@@ -42,27 +27,16 @@ interface FilaMapa {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const nivel = (searchParams.get("nivel") ?? "departamento") as Nivel;
+    const nivelParam = searchParams.get("nivel") ?? "departamento";
     const padre = searchParams.get("padre") ?? "";
     const anioParam = searchParams.get("anio");
     const modalidadParam = searchParams.get("modalidad");
 
-    if (!(nivel in LEN_NIVEL)) {
-      return NextResponse.json({ error: "nivel inválido" }, { status: 400 });
+    const validacion = validarParametrosMapa(nivelParam, padre);
+    if (!validacion.ok) {
+      return NextResponse.json({ error: validacion.error }, { status: 400 });
     }
-    if (padre && !/^\d+$/.test(padre)) {
-      return NextResponse.json({ error: "padre inválido" }, { status: 400 });
-    }
-
-    const lenNivel = LEN_NIVEL[nivel];
-    const lenPadre = LEN_PADRE[nivel];
-
-    if (lenPadre > 0 && padre.length !== lenPadre) {
-      return NextResponse.json(
-        { error: `el nivel '${nivel}' requiere un 'padre' de ${lenPadre} dígitos` },
-        { status: 400 }
-      );
-    }
+    const { nivel, lenNivel, lenPadre } = validacion;
 
     // ubigeo normalizado a 6 dígitos (en BD se guarda como int y pierde el cero inicial)
     const ubigeo = Prisma.sql`lpad(ubigeo::text, 6, '0')`;
