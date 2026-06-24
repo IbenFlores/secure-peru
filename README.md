@@ -95,6 +95,19 @@ Los límites geográficos están en `public/geo/` (departamentos, provincias y d
 
 ---
 
+## ✅ Pruebas
+
+El proyecto usa [Vitest](https://vitest.dev/). Para correr todas las pruebas:
+
+```bash
+npm test
+```
+
+- Las pruebas **unitarias** (validación de la API, helpers del mapa, integridad de los GeoJSON) corren sin base de datos.
+- Las pruebas de **integración** (`tests/mapa-api.integration.test.ts`) pegan al endpoint `/api/mapa` contra la base de datos. Se **saltan automáticamente** si no hay `DATABASE_URL`; para que corran, levanta la BD y carga los datos (pasos de arriba).
+
+---
+
 ## 🛠️ Flujo de Trabajo (Git Workflow)
 
 Para evitar conflictos en el código, seguiremos estas reglas básicas:
