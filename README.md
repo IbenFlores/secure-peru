@@ -21,43 +21,44 @@ Antes de clonar el proyecto, asegúrate de tener instalado en tu computadora:
 
 * [Node.js](https://nodejs.org/) (Versión 20 LTS o superior).
 * [Git](https://git-scm.com/).
-* [PostgreSQL 17](https://www.postgresql.org/) (Corriendo localmente).
+* Una base de datos PostgreSQL. La forma más fácil es con [Docker Desktop](https://www.docker.com/products/docker-desktop/) (incluido en los pasos de abajo). Si prefieres, puedes usar un PostgreSQL instalado localmente.
 
 ---
 
 ## 🚀 Configuración del Entorno Local
 
-Sigue estos pasos estrictamente en orden para levantar el proyecto en tu máquina sin errores:
+Sigue estos pasos en orden para levantar el proyecto en tu máquina:
 
 ### 1. Clonar el repositorio e instalar dependencias
-Abre tu terminal y ejecuta:
 
 ```bash
-git clone [https://github.com/TU_USUARIO/SecurePeru.git](https://github.com/TU_USUARIO/SecurePeru.git)
-cd SecurePeru
+git clone https://github.com/IbenFlores/secure-peru.git
+cd secure-peru
 npm install
 ```
 
-### 2. Configurar la Base de Datos (PostgreSQL)
-Abre tu gestor de base de datos local (pgAdmin, DBeaver, o terminal) y crea una base de datos vacía llamada `secureperu_db`:
-
-```sql
-CREATE DATABASE secureperu_db;
-```
-
-### 3. Variables de Entorno
-En la raíz del proyecto, crea un archivo llamado `.env` y agrega tu cadena de conexión. Reemplaza `TU_USUARIO` y `TU_CONTRASEÑA` por las credenciales de tu PostgreSQL local:
-
-```env
-DATABASE_URL="postgresql://TU_USUARIO:TU_CONTRASEÑA@localhost:5432/secureperu_db?schema=public"
-```
-*(Nota para usuarios de Mac/Homebrew: Si tu Postgres no tiene contraseña, tu URL podría verse así: `postgresql://tu_usuario_mac@localhost:5432/secureperu_db?schema=public`)*
-
-### 4. Inicializar Prisma (Migraciones y Cliente)
-Ejecuta los siguientes comandos para que Prisma cree las tablas en tu base de datos y genere el cliente interno de TypeScript:
+### 2. Variables de entorno
+Copia el archivo de ejemplo. Ya viene listo para la base de datos de Docker, no necesitas cambiar nada si usas la Opción A:
 
 ```bash
-npx prisma migrate dev --name init_denuncias
+cp .env.example .env
+```
+
+### 3. Levantar la base de datos
+
+**Opción A — Docker (recomendada, un solo comando):**
+
+```bash
+docker compose up -d
+```
+Esto crea un PostgreSQL con usuario/contraseña/base `secureperu` en el puerto `5435`.
+
+**Opción B — PostgreSQL local:** crea una base de datos vacía llamada `secureperu` y ajusta el `DATABASE_URL` en tu `.env` con tus credenciales (ver comentarios dentro de `.env.example`).
+
+### 4. Crear las tablas (Prisma)
+
+```bash
+npx prisma migrate deploy
 npx prisma generate
 ```
 
@@ -65,18 +66,32 @@ npx prisma generate
 
 ## 📊 Poblado de Datos (Ingesta del CSV)
 
-Para que los gráficos y mapas funcionen, necesitas poblar tu base de datos local con los +357,000 registros.
+Para que el mapa y los gráficos funcionen, necesitas poblar la base de datos con los +357,000 registros.
 
-1. **Ubicar el archivo:** Crea una carpeta llamada `data` en la raíz del proyecto y coloca dentro el archivo exacto llamado `DATASET_Denuncias_Policiales_Ene 2018 a Abr 2026.csv`.
-2. **Levantar el servidor:** 
+1. **Ubicar el archivo:** asegúrate de que el archivo `DATASET_Denuncias_Policiales_Ene 2018 a Abr 2026.csv` esté dentro de la carpeta `data/` en la raíz del proyecto.
+2. **Levantar el servidor:**
 ```bash
 npm run dev
 ```
-3. **Disparar la ingesta:** Abre una **nueva pestaña** en tu terminal (dejando el servidor corriendo) y ejecuta:
+3. **Disparar la ingesta:** abre una **nueva pestaña** en la terminal (deja el servidor corriendo) y ejecuta el `curl` apuntando al puerto que muestra `npm run dev` (normalmente `3000`):
    ```bash
    curl -X POST http://localhost:3000/api/admin/upload-csv
    ```
-Verás en la consola del servidor cómo se insertan los registros por lotes. Espera a que termine (mensaje: *"Migración completada exitosamente"*).
+Espera a que termine (mensaje: *"Migración completada exitosamente"*). Luego abre el navegador en la URL que indica `npm run dev`.
+
+---
+
+## 🗺️ Cómo usar el mapa
+
+El mapa es interactivo y tiene tres niveles de detalle:
+
+1. Inicia mostrando el Perú coloreado **por departamento** (a más oscuro, más denuncias).
+2. Haz **clic en un departamento** para ver sus **provincias**.
+3. Haz **clic en una provincia** para ver sus **distritos**.
+4. Usa el menú superior (Perú / Departamento / Provincia) para **volver atrás**.
+5. Los filtros de **Año** y **Modalidad** aplican en cualquier nivel.
+
+Los límites geográficos están en `public/geo/` (departamentos, provincias y distritos) y el cruce con los datos se hace por código de **ubigeo**.
 
 ---
 
@@ -109,5 +124,6 @@ Para evitar conflictos en el código, seguiremos estas reglas básicas:
 * **Framework:** Next.js (App Router)
 * **Lenguaje:** TypeScript
 * **Estilos:** Tailwind CSS
-* **Base de Datos:** PostgreSQL 17
+* **Mapa:** GeoJSON + d3-geo (coropletas con drill-down)
+* **Base de Datos:** PostgreSQL 16+ (vía Docker o local)
 * **ORM:** Prisma v7 (con `@prisma/adapter-pg`)
