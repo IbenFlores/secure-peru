@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16
+    container_name: secureperu-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: secureperu
+      POSTGRES_PASSWORD: secureperu
+      POSTGRES_DB: secureperu
+    ports:
+      # host:contenedor — usamos 5435 en el host para no chocar con un
+      # Postgres local que ya use el 5432
+      - "5435:5432"
+    volumes:
+      - secureperu_data:/var/lib/postgresql/data
+
+volumes:
+  secureperu_data:
