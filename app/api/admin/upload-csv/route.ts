@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 import { parse } from "csv-parse";
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -44,7 +44,7 @@ export async function POST() {
       })
     );
 
-    let batch: any[] = [];
+    let batch: Prisma.DenunciaCreateManyInput[] = [];
     const BATCH_SIZE = 5000; // Insertar de 5k en 5k registros para optimizar PostgreSQL
     let totalInserted = 0;
 
@@ -58,14 +58,14 @@ export async function POST() {
 
       // Mapeamos los campos de texto y convertimos los números correctamente
       batch.push({
-        anio: parseInt(dataRow.ANIO),
-        mes: parseInt(dataRow.MES),
+        anio: Number.parseInt(dataRow.ANIO),
+        mes: Number.parseInt(dataRow.MES),
         departamento: dataRow.DPTO_HECHO_NEW.trim(),
         provincia: dataRow.PROV_HECHO.trim(),
         distrito: dataRow.DIST_HECHO.trim(),
-        ubigeo: parseInt(dataRow.UBIGEO_HECHO),
+        ubigeo: Number.parseInt(dataRow.UBIGEO_HECHO),
         modalidad: dataRow.P_MODALIDADES.trim(),
-        cantidad: parseInt(dataRow.cantidad),
+        cantidad: Number.parseInt(dataRow.cantidad),
       });
 
       // Cuando el lote está lleno, se inserta en masa en la BD
@@ -94,10 +94,10 @@ export async function POST() {
       registrosProcesados: totalInserted,
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error al procesar el CSV:", error);
     return NextResponse.json(
-      { error: "Error interno del servidor", detalles: error.message },
+      { error: "Error interno del servidor", detalles: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   } finally {

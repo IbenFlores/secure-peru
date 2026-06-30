@@ -10,6 +10,7 @@ import {
   type Nivel,
   type DatoMapa,
 } from "@/app/lib/geo-config";
+import PanelDelitos, { type DetalleRegion } from "./panel-delitos";
 
 const WIDTH = 600;
 const HEIGHT = 720;
@@ -72,6 +73,13 @@ export default function MapaPeru() {
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Panel lateral: detalle de la región en foco.
+  // En el nivel más profundo (distrito) no se puede entrar más, así que al
+  // hacer clic solo se "enfoca" ese distrito en el panel.
+  const [detalle, setDetalle] = useState<DetalleRegion | null>(null);
+  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [distritoSel, setDistritoSel] = useState<string | null>(null);
+
   // Filtros
   const [filtros, setFiltros] = useState<FiltrosData>({ anios: [], modalidades: [] });
   const [anio, setAnio] = useState("");
@@ -125,30 +133,63 @@ export default function MapaPeru() {
   // Cada vez que cambia la vista o los filtros → recargar geo + datos
   useEffect(() => {
     let cancelled = false;
-    const esInicial = loading;
-    if (!esInicial) setFetching(true);
-
-    Promise.all([cargarGeo(vista.nivel), cargarDatos(vista, anio, modalidad)])
-      .then(([geo, mapa]) => {
+    const cargar = async () => {
+      if (!loading) setFetching(true);
+      try {
+        const [geo, mapa] = await Promise.all([
+          cargarGeo(vista.nivel),
+          cargarDatos(vista, anio, modalidad),
+        ]);
         if (cancelled) return;
         setGeoActual(geo);
         setDatos(mapa);
         setError(null);
-        setLoading(false);
-        setFetching(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Error desconocido");
-        setLoading(false);
-        setFetching(false);
-      });
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Error desconocido");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setFetching(false);
+        }
+      }
+    };
+    cargar();
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista, anio, modalidad, cargarGeo, cargarDatos]);
+
+  // Detalle de la región en foco para el panel lateral.
+  // El foco es el distrito seleccionado o, por defecto, la región en la que se
+  // entró (vista.padre); vacío = nivel nacional.
+  useEffect(() => {
+    let cancelled = false;
+    const codigoFoco = distritoSel ?? vista.padre;
+    const cargarDetalle = async () => {
+      setCargandoDetalle(true);
+      const params = new URLSearchParams();
+      if (codigoFoco) params.set("codigo", codigoFoco);
+      if (anio) params.set("anio", anio);
+      if (modalidad) params.set("modalidad", modalidad);
+      try {
+        const res = await fetch(`/api/mapa/detalle?${params.toString()}`);
+        const json = res.ok ? await res.json() : null;
+        if (!cancelled) setDetalle(json && !json.error ? json : null);
+      } catch {
+        if (!cancelled) setDetalle(null);
+      } finally {
+        if (!cancelled) setCargandoDetalle(false);
+      }
+    };
+    cargarDetalle();
+    return () => {
+      cancelled = true;
+    };
+  }, [distritoSel, vista.padre, anio, modalidad]);
 
   // Features visibles en la vista actual (filtrados por el padre)
   const features = useMemo<Feature[]>(() => {
@@ -200,18 +241,32 @@ export default function MapaPeru() {
 
   const handleMouseLeave = useCallback(() => setTooltip(null), []);
 
-  // Drill-down al hacer clic en un feature
-  const handleClick = useCallback(
-    (feature: Feature) => {
+  // Entrar a una región (desde el mapa o desde el ranking del panel).
+  // Si hay un nivel más profundo, hace drill-down; si no (distrito), solo
+  // enfoca esa zona en el panel lateral.
+  const entrarRegion = useCallback(
+    (codigo: string, nombre: string) => {
       const cfg = NIVELES[vista.nivel];
-      if (!cfg.siguiente) return; // ya es el nivel más profundo (distrito)
-      const codigo = codigoDeFeature(feature, vista.nivel);
-      const nombre = nombreDeFeature(feature, vista.nivel);
-      setBreadcrumb((bc) => [...bc, vista]);
-      setVista({ nivel: cfg.siguiente!, padre: codigo, label: nombre });
+      if (cfg.siguiente) {
+        setBreadcrumb((bc) => [...bc, vista]);
+        setVista({ nivel: cfg.siguiente, padre: codigo, label: nombre });
+        setDistritoSel(null);
+      } else {
+        setDistritoSel(codigo);
+      }
       setTooltip(null);
     },
     [vista]
+  );
+
+  // Drill-down al hacer clic en un feature del mapa
+  const handleClick = useCallback(
+    (feature: Feature) => {
+      const codigo = codigoDeFeature(feature, vista.nivel);
+      const nombre = nombreDeFeature(feature, vista.nivel);
+      entrarRegion(codigo, nombre);
+    },
+    [vista.nivel, entrarRegion]
   );
 
   // Navegar a una posición previa del breadcrumb (la ruta = breadcrumb + vista actual)
@@ -219,6 +274,7 @@ export default function MapaPeru() {
     (index: number) => {
       setVista(breadcrumb[index]);
       setBreadcrumb((bc) => bc.slice(0, index));
+      setDistritoSel(null);
       setTooltip(null);
     },
     [breadcrumb]
@@ -228,6 +284,7 @@ export default function MapaPeru() {
   const reiniciar = useCallback(() => {
     setVista(VISTA_INICIAL);
     setBreadcrumb([]);
+    setDistritoSel(null);
     setTooltip(null);
   }, []);
 
@@ -349,33 +406,58 @@ export default function MapaPeru() {
         {fetching && " — actualizando…"}
       </p>
 
-      {/* Mapa SVG */}
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className={`w-full max-w-[600px] mx-auto h-auto transition-opacity ${fetching ? "opacity-50" : ""}`}
-      >
-        {features.map((feature, i) => {
-          const codigo = codigoDeFeature(feature, vista.nivel);
-          const total = datos.get(codigo)?.total ?? 0;
-          const t = lerp(total, min, max);
-          const d = pathGenerator(feature) ?? "";
-          const clickable = !!cfgActual.siguiente;
+      {/* Mapa (izquierda) + panel de datos (derecha) */}
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1">
+          <svg
+            viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+            className={`mx-auto h-auto w-full max-w-[600px] transition-opacity ${fetching ? "opacity-50" : ""}`}
+          >
+            {features.map((feature, i) => {
+              const codigo = codigoDeFeature(feature, vista.nivel);
+              const total = datos.get(codigo)?.total ?? 0;
+              const t = lerp(total, min, max);
+              const d = pathGenerator(feature) ?? "";
+              const enfocado = !cfgActual.siguiente && distritoSel === codigo;
 
-          return (
-            <path
-              key={codigo || `f-${i}`}
-              d={d}
-              fill={total > 0 ? colorScale(t) : "#e5e5e5"}
-              stroke="#fff"
-              strokeWidth={0.6}
-              onMouseMove={(e) => handleMouseMove(e, feature)}
-              onMouseLeave={handleMouseLeave}
-              onClick={() => handleClick(feature)}
-              className={`transition-opacity hover:opacity-75 ${clickable ? "cursor-pointer" : "cursor-default"}`}
+              return (
+                <path
+                  key={codigo || `f-${i}`}
+                  d={d}
+                  fill={total > 0 ? colorScale(t) : "#e5e5e5"}
+                  stroke={enfocado ? "#1d4ed8" : "#fff"}
+                  strokeWidth={enfocado ? 1.6 : 0.6}
+                  onMouseMove={(e) => handleMouseMove(e, feature)}
+                  onMouseLeave={handleMouseLeave}
+                  onClick={() => handleClick(feature)}
+                  className="cursor-pointer transition-opacity hover:opacity-75"
+                />
+              );
+            })}
+          </svg>
+
+          {/* Leyenda */}
+          <div className="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            <span>{min.toLocaleString("es-PE")}</span>
+            <div
+              className="h-3 w-48 rounded"
+              style={{
+                background: `linear-gradient(to right, ${colorScale(0)}, ${colorScale(0.5)}, ${colorScale(1)})`,
+              }}
             />
-          );
-        })}
-      </svg>
+            <span>{max.toLocaleString("es-PE")}</span>
+            <span className="ml-1">denuncias</span>
+          </div>
+        </div>
+
+        <PanelDelitos
+          detalle={detalle}
+          cargando={cargandoDetalle}
+          tituloNivel={ETIQUETA_NIVEL[vista.nivel]}
+          regiones={Array.from(datos.values())}
+          onSeleccionarRegion={entrarRegion}
+        />
+      </div>
 
       {/* Tooltip */}
       {tooltip && (
@@ -388,19 +470,6 @@ export default function MapaPeru() {
           {tooltip.total.toLocaleString("es-PE")} denuncias
         </div>
       )}
-
-      {/* Leyenda */}
-      <div className="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-600">
-        <span>{min.toLocaleString("es-PE")}</span>
-        <div
-          className="h-3 w-48 rounded"
-          style={{
-            background: `linear-gradient(to right, ${colorScale(0)}, ${colorScale(0.5)}, ${colorScale(1)})`,
-          }}
-        />
-        <span>{max.toLocaleString("es-PE")}</span>
-        <span className="ml-1">denuncias</span>
-      </div>
     </div>
   );
 }
