@@ -11,6 +11,7 @@ import {
   type DatoMapa,
 } from "@/app/lib/geo-config";
 import PanelDelitos, { type DetalleRegion } from "./panel-delitos";
+import GraficoBarras from "./grafico-barras";
 
 const WIDTH = 600;
 const HEIGHT = 720;
@@ -458,6 +459,12 @@ export default function MapaPeru() {
           onSeleccionarRegion={entrarRegion}
         />
       </div>
+
+      {/* Gráfico de barras — se actualiza con el drill-down */}
+      <GraficoBarras
+        codigo={distritoSel || vista.padre}
+        filtros={filtros}
+      />
 
       {/* Tooltip */}
       {tooltip && (
